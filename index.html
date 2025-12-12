@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Advanced Countdown</title>
+
+<style>
+  :root {
+    --bg1: #1e1e2f;
+    --bg2: #2b4162;
+    --text: #fff;
+    --card-bg: rgba(255, 255, 255, 0.12);
+  }
+
+  body.light {
+    --bg1: #f0f0f5;
+    --bg2: #d6d6e5;
+    --text: #222;
+    --card-bg: rgba(0, 0, 0, 0.1);
+  }
+
+  body {
+    margin: 0;
+    font-family: Poppins, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--text);
+    background: linear-gradient(135deg, var(--bg1), var(--bg2));
+    transition: 0.4s ease;
+    animation: bgMove 8s infinite alternate ease-in-out;
+  }
+
+  @keyframes bgMove {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 100% 100%; }
+  }
+
+  .card {
+    width: 380px;
+    padding: 25px;
+    border-radius: 20px;
+    background: var(--card-bg);
+    backdrop-filter: blur(15px);
+    text-align: center;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+  }
+
+  input, button {
+    width: 100%;
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 10px;
+    border: none;
+    font-size: 15px;
+  }
+
+  input {
+    background: rgba(255,255,255,0.2);
+    color: var(--text);
+  }
+
+  button {
+    background: #6c63ff;
+    color: white;
+    cursor: pointer;
+  }
+
+  button:hover { background: #5a54e6; }
+  .change-btn { background: #ff6575; }
+
+  .event-list {
+    margin-top: 15px;
+    text-align: left;
+  }
+
+  .event-item {
+    background: rgba(255,255,255,0.15);
+    padding: 10px;
+    margin: 5px 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  /* Circular Timer */
+  .circle-wrapper {
+    margin: 20px auto;
+    width: 200px;
+    height: 200px;
+    position: relative;
+  }
+  svg {
+    transform: rotate(-90deg);
+  }
+  .count {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 26px;
+    font-weight: bold;
+  }
+
+  .toggle-mode {
+    background: #222;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    cursor: pointer;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="toggle-mode" onclick="toggleMode()"></div>
+
+<!-- SETUP PAGE -->
+<div class="card" id="setupPage">
+  <h2>Create Event</h2>
+  
+  <input id="eventName" placeholder="Event Name">
+  <input type="datetime-local" id="eventDate">
+
+  <button onclick="addEvent()">Add Event</button>
+
+  <h3 style="margin-top:20px;">Saved Events</h3>
+  <div class="event-list" id="eventList"></div>
+</div>
+
+<!-- COUNTDOWN PAGE -->
+<div class="card" id="countdownPage" style="display:none;">
+  <h2 id="eventTitle"></h2>
+
+  <div class="circle-wrapper">
+    <svg width="200" height="200">
+      <circle cx="100" cy="100" r="90" stroke="#444" stroke-width="12" fill="none"></circle>
+      <circle id="progressCircle" cx="100" cy="100" r="90" stroke="#6c63ff" 
+              stroke-width="12" fill="none" stroke-linecap="round" />
+    </svg>
+    <div class="count" id="timeText"></div>
+  </div>
+
+  <button class="change-btn" onclick="showSetup()">Change Event</button>
+  <button onclick="shareEvent()">Share Link</button>
+
+</div>
+
+<script>
+  // --------------------
+  // DARK MODE
+  // --------------------
+  function toggleMode() {
+    document.body.classList.toggle("light");
+    localStorage.setItem("mode", document.body.classList.contains("light") ? "light" : "dark");
+  }
+
+  if (localStorage.getItem("mode") === "light") {
+    document.body.classList.add("light");
+  }
+
+  // --------------------
+  // EVENT STORAGE
+  // --------------------
+  let events = JSON.parse(localStorage.getItem("events") || "[]");
+  let currentEvent = null;
+  let interval;
+
+  function saveEvents() {
+    localStorage.setItem("events", JSON.stringify(events));
+  }
+
+  // --------------------
+  // ADD EVENT
+  // --------------------
+  function addEvent() {
+    let name = document.getElementById("eventName").value.trim();
+    let date = document.getElementById("eventDate").value;
+
+    if (!name || !date) return alert("Please fill all fields.");
+
+    events.push({ name, date });
+    saveEvents();
+    loadEvents();
+  }
+
+  // --------------------
+  // LIST EVENTS
+  // --------------------
+  function loadEvents() {
+    const list = document.getElementById("eventList");
+    list.innerHTML = "";
+
+    events.forEach((ev, i) => {
+      const div = document.createElement("div");
+      div.className = "event-item";
+      div.textContent = `${ev.name} – ${ev.date}`;
+      div.onclick = () => startCountdown(ev);
+      list.appendChild(div);
+    });
+  }
+
+  loadEvents();
+
+  // --------------------
+  // START COUNTDOWN
+  // --------------------
+  function startCountdown(ev) {
+    currentEvent = ev;
+
+    document.getElementById("setupPage").style.display = "none";
+    document.getElementById("countdownPage").style.display = "block";
+    document.getElementById("eventTitle").innerText = ev.name;
+
+    clearInterval(interval);
+
+    const circle = document.getElementById("progressCircle");
+    const radius = 90;
+    const circumference = 2 * Math.PI * radius;
+    circle.style.strokeDasharray = circumference;
+
+    const target = new Date(ev.date).getTime();
+
+    interval = setInterval(() => {
+      const now = Date.now();
+      const diff = target - now;
+
+      if (diff <= 0) {
+        document.getElementById("timeText").innerHTML = "Started 🎉";
+        circle.style.strokeDashoffset = 0;
+        clearInterval(interval);
+        return;
+      }
+
+      const d = Math.floor(diff / (1000*60*60*24));
+      const h = Math.floor((diff / (1000*60*60)) % 24);
+      const m = Math.floor((diff / (1000*60)) % 60);
+      const s = Math.floor((diff / 1000) % 60);
+
+      document.getElementById("timeText").innerHTML =
+        `${d}d<br>${h}h ${m}m ${s}s`;
+
+      const totalTime = target - (target - diff);
+      const percent = diff / totalTime;
+      circle.style.strokeDashoffset = circumference * (1 - percent);
+    }, 1000);
+  }
+
+  // --------------------
+  // CHANGE EVENT
+  // --------------------
+  function showSetup() {
+    document.getElementById("countdownPage").style.display = "none";
+    document.getElementById("setupPage").style.display = "block";
+  }
+
+  // --------------------
+  // SHARE EVENT LINK
+  // --------------------
+  function shareEvent() {
+    const url = `${location.origin}${location.pathname}?event=${encodeURIComponent(currentEvent.name)}&date=${encodeURIComponent(currentEvent.date)}`;
+    navigator.clipboard.writeText(url);
+    alert("Share link copied!");
+  }
+
+  // --------------------
+  // LOAD EVENT FROM URL
+  // --------------------
+  const params = new URLSearchParams(location.search);
+  if (params.get("event") && params.get("date")) {
+    startCountdown({
+      name: params.get("event"),
+      date: params.get("date")
+    });
+  }
+</script>
+
+</body>
+</html>
